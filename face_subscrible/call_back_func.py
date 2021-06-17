@@ -8,6 +8,7 @@ def on_connect(client, userdata, flags, rc):
     if rc == 0:
         print("Connect success")
         client.subscribe("face/response")
+        client.loop_forever()
     else:
         print(f"Connect failed result code {str(rc)}")
 
