@@ -6,7 +6,7 @@ import json
 
 def on_connect(client, userdata, flags, rc):
     if rc == 0:
-        print("connect success")
+        print("is online connect success")
     else:
         print(f"Connect failed result code {rc}")
 

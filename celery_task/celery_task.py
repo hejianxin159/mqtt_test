@@ -10,7 +10,7 @@ from is_online_subscrible import call_back_func as is_online_call_back
 from business.subscrible_business.upload_face import SubscribleBusiness
 from business.subscrible_business import call_back_func as business_call_back
 
-
+CELERY_TASK_SERIALIZER = "JSON"
 broker = 'redis://10.28.25.213:6379/5'
 backend = 'redis://10.28.25.213:6379/6'
 worker = Celery('tasks', broker=broker, backend=backend)
@@ -50,14 +50,8 @@ def subscrible_business(sn):
     client = SubscribleBusiness(on_connect=business_call_back.on_connect,
                                 on_message=business_call_back.on_message,
                                 on_disconnect=business_call_back.on_disconnect)
-    close_business.delay(client.mqtt_client)
     client.add_listen(sn)
 
 
-@worker.task(base=CustomTask)
-def close_business(client):
-    # 关闭未响应的business
-    print(client, "wait close")
-    import time
-    time.sleep(10)
-    client.disconnect()
+
+

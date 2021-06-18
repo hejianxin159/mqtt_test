@@ -6,7 +6,7 @@ import json
 
 def on_connect(client, userdata, flags, rc):
     if rc == 0:
-        print("Connect success")
+        print("face subscrible Connect success")
         client.subscribe("face/response")
     else:
         print(f"Connect failed result code {str(rc)}")

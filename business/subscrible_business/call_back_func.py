@@ -6,7 +6,7 @@ import json
 
 def on_connect(client, userdata, flags, rc):
     if rc == 0:
-        print("Connect success")
+        print("business Connect success")
     else:
         print(f"Connect failed result code {str(rc)}")
 
@@ -29,11 +29,15 @@ def on_message(client, userdata, msg):
         print(json_message)
     # 关闭连接
     client.disconnect()
+    client.loop_stop()
 
 
 def on_disconnect(client, userdata, rc):
+    if rc == 0:
+        print("success disconnect")
     if rc != 0:
         print("Unexpected disconnection %s" % rc)
+
 
 
 def create_face(data_info):
