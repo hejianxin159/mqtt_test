@@ -8,6 +8,7 @@ from face_subscrible import call_back_func
 class SubscribleAll(SubscribleBase):
     def __init__(self, **kwargs):
         super(SubscribleAll, self).__init__(**kwargs)
+        self.mqtt_client.loop_forever()
 
 
 if __name__ == '__main__':

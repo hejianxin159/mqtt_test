@@ -10,6 +10,8 @@ class IsOnlineSubscruble(SubscribleBase):
         super(IsOnlineSubscruble, self).__init__(**kwargs)
 
     def add_listen(self, client_list):
+        # 监听多台设备
+        self.mqtt_client.subscribe("online/response")
         for client_id in client_list:
             self.mqtt_client.subscribe(f"will/{client_id}/response")
         self.mqtt_client.loop_forever()

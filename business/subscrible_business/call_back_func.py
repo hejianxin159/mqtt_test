@@ -31,6 +31,11 @@ def on_message(client, userdata, msg):
     client.disconnect()
 
 
+def on_disconnect(client, userdata, rc):
+    if rc != 0:
+        print("Unexpected disconnection %s" % rc)
+
+
 def create_face(data_info):
     print(data_info)
 

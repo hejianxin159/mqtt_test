@@ -53,4 +53,3 @@ class PublishBase(ConnectBase):
 class SubscribleBase(ConnectBase):
     def __init__(self, **kwargs):
         super(SubscribleBase, self).__init__(**kwargs)
-        self.mqtt_client.loop_forever()
