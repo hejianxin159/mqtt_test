@@ -10,11 +10,18 @@ class SubscribleBusiness(SubscribleBase):
     def __init__(self, **kwargs):
         super(SubscribleBusiness, self).__init__(**kwargs)
         self.mqtt_client.loop_start()
+        self.mqtt_client.exec_time = time.time()
+        self.mqtt_client.is_success = 0
 
     def add_listen(self, client_id):
         topic = f"face/{client_id}/response"
         self.mqtt_client.subscribe(topic)
-        time.sleep(100)
+        while True:
+            if time.time() - self.mqtt_client.exec_time > 600:
+                break
+            if self.mqtt_client.is_success == 1:
+                break
+            time.sleep(1)
         self.mqtt_client.loop_stop()
         # self.mqtt_client.disconnect()
         # self.mqtt_client.loop_forever()

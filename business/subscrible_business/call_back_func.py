@@ -24,12 +24,15 @@ def on_message(client, userdata, msg):
         delete_face(json_message)
     elif json_message["cmd"] == "get_person_info":
         all_user(json_message)
+    elif json_message["cmd"] == "face_search":
+        face_search(json_message)
     else:
         print("not func")
         print(json_message)
     # 关闭连接
     client.disconnect()
     client.loop_stop()
+    client.is_success = 1
 
 
 def on_disconnect(client, userdata, rc):
@@ -37,7 +40,6 @@ def on_disconnect(client, userdata, rc):
         print("success disconnect")
     if rc != 0:
         print("Unexpected disconnection %s" % rc)
-
 
 
 def create_face(data_info):
@@ -53,4 +55,8 @@ def delete_face(data_info):
 
 
 def all_user(data_info):
+    print(data_info)
+
+
+def face_search(data_info):
     print(data_info)

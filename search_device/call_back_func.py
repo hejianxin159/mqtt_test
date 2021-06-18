@@ -7,7 +7,7 @@ import json
 def on_connect(client, userdata, flags, rc):
     if rc == 0:
         print("Connect success")
-        client.subscribe("face/request")
+        client.subscribe("face/75b994c0-578b65a4/response")
     else:
         print(f"Connect failed result code {str(rc)}")
 

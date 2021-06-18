@@ -11,7 +11,8 @@ import copy
 client_list = []
 # subscrible_business.delay(client_id)
 # subscrible_business.delay(client_id)
-# subscrible_business.delay(client_id)
-for i in range(200):
-    subscrible_business.delay(client_id)
+subscrible_business.delay(client_id)
+# for i in range(20):
+#     subscrible_business.delay(client_id)
 # subscrible_all.delay()
+# is_online_subscrible.delay([client_id])
