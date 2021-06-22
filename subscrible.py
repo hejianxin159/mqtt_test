@@ -201,7 +201,6 @@ def face_search(client, data_info):
     # if camera:
     for camera in db_session.query(Camera).filter(Camera.sn == data_info["sn"],
                                                   Camera.project_id == data_info["cmd_id"]).all():
-        print(camera)
         camera.online = 1
         db_session.add(camera)
         db_session.commit()
@@ -215,7 +214,6 @@ def face_search(client, data_info):
             "cmd_id": camera.project_id
         }))
         for person_resource in person_resource_all:
-            print(person_resource)
             Collect(client, person_resource, camera.id)
         # 检测是否成功
         # client.publish(f'face/{data_info["sn"]}/request', json.dumps({
@@ -311,14 +309,6 @@ class Collect:
             db_session.add(self.person_obj)
             db_session.commit()
 
-    def create_again(self):
-        for exist_task in db_session.query(PersonSync).filter(
-                PersonSync.project_id == self.person_obj.project_id,
-                PersonSync.camera_id == self.camera_id,
-                PersonSync.person_id == self.person_obj.person_id,
-                PersonSync.attachment_id != self.person_obj.attachment_id).all():
-            print(exist_task)
-
     def create_face_sync(self):
         # 正在同步中
         is_same, sync_status = self.comparison_picture(self.person_obj, self.camera_id)
@@ -328,8 +318,7 @@ class Collect:
                 self.create_face_task()
             elif sync_status == 100:
                 # 任务存在且照片不一样
-                # 找出之前的任务，重新下发任务
-                self.create_again()
+                pass
 
     def search_picture_url(self, attachment_id):
         if attachment_id:
