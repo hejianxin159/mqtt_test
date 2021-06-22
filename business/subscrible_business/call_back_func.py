@@ -2,6 +2,7 @@
 # Author : hejianxin
 # Time : 2021/6/17 2:30 下午
 import json
+from models.models import Camera, db_session, PersonResource, PersonSync
 
 
 def on_connect(client, userdata, flags, rc):
@@ -29,10 +30,11 @@ def on_message(client, userdata, msg):
     else:
         print("not func")
         print(json_message)
+    print(json_message)
     # 关闭连接
     client.disconnect()
-    client.loop_stop()
     client.is_success = 1
+    # client.loop_stop()
 
 
 def on_disconnect(client, userdata, rc):
@@ -59,4 +61,10 @@ def all_user(data_info):
 
 
 def face_search(data_info):
-    print(data_info)
+    # 查找设备是否在线
+    camera = db_session.query(Camera).filter(Camera.sn == data_info["sn"]).first()
+    if camera:
+        camera.online = 1
+
+    db_session.add(camera)
+    db_session.commit()

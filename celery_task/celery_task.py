@@ -45,12 +45,11 @@ def is_online_subscrible(client_list):
 
 
 @worker.task(base=CustomTask)
-def subscrible_business(sn):
+def subscrible_business(client_id):
     # 订阅业务topic, 需要超时关闭
-    client = SubscribleBusiness(on_connect=business_call_back.on_connect,
-                                on_message=business_call_back.on_message,
-                                on_disconnect=business_call_back.on_disconnect)
-    client.add_listen(sn)
+    SubscribleBusiness(on_connect=business_call_back.on_connect,
+                       on_message=business_call_back.on_message,
+                       on_disconnect=business_call_back.on_disconnect).add_listen(client_id)
 
 
 
