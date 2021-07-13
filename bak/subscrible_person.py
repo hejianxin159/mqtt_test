@@ -1,11 +1,9 @@
 # -*- coding: utf-8 -*-
 # Author : hejianxin
-# Time : 2021/6/22 10:41 上午
+# Time : 2021/6/23 2:38 下午
 import paho.mqtt.client as mqtt
 import json
-from models.models import db_session, Camera, PersonSync, PersonResource, Attachment
-import datetime
-
+from models.models import callback_session, db_session, Camera, PersonSync, PersonResource, Attachment
 
 mqtt_host = "10.28.25.213"
 mqtt_port = 1883
@@ -71,51 +69,54 @@ def on_disconnect(client, userdata, rc):
         print("Unexpected disconnection %s" % rc)
 
 
-def is_synchronization(person_id, project_id):
+def is_synchronization(person_id, project_id, action):
     # 查看是否同步成功
     person_camera = []
     use_camera = []
-    for camera in db_session.query(Camera.id, Camera.online).filter(Camera.project_id == project_id).all():
+    for camera in callback_session.query(Camera.id, Camera.online).filter(Camera.project_id == project_id).all():
         # 找出当前这个人的所有摄像头
         camera_id = camera[0]
         person_camera.append(camera_id)
-        use_person_sync = db_session.query(PersonSync).filter(PersonSync.camera_id == camera_id,
+        use_person_sync = callback_session.query(PersonSync).filter(PersonSync.camera_id == camera_id,
                                                               PersonSync.person_id == person_id).first()
-        if camera[1] != 1 or not use_person_sync:
+        if camera[1] != 1 and not use_person_sync:
             # 摄像头不在线, 任务肯定创建失败
-            db_session.query(PersonResource).filter(PersonResource.project_id == project_id,
+            callback_session.query(PersonResource).filter(PersonResource.project_id == project_id,
                                                     PersonResource.person_id == person_id).update(
                 {
                     "sync": 2,
-                    "status": 1
+                    "status": 1 if action == "add" else 2
                 })
 
-            db_session.commit()
+            callback_session.commit()
+            return
+        if camera[1] == 1 and not use_person_sync:
+            # 摄像头在线，还未下发任务。
             return
 
-        if use_person_sync.sync_status == 2:
-            db_session.query(PersonResource).filter(PersonResource.person_id == person_id).update({
+        if use_person_sync.sync_status == 2 or use_person_sync.sync_status == 3:
+            callback_session.query(PersonResource).filter(PersonResource.person_id == person_id).update({
                 "sync": 2,
-                "status": 1
+                "status": 1 if action == "add" else 2
             })
-            db_session.commit()
+            callback_session.commit()
             return
         if use_person_sync.sync_status == 1:
             use_camera.append(camera_id)
     if len(person_camera) == len(use_camera):
-        db_session.query(PersonResource).filter(PersonResource.person_id == person_id).update(
+        callback_session.query(PersonResource).filter(PersonResource.person_id == person_id).update(
             {
                 "sync": 1,
-                "status": 1
+                "status": 1 if action == "add" else 2
             }
         )
         print(f"{person_id} synchronization succeeded")
-        db_session.commit()
+        callback_session.commit()
 
 
 def create_face(data_info):
     print('create_face', data_info)
-    person_sync = db_session.query(PersonSync).filter(PersonSync.id == data_info["cmd_id"]).first()
+    person_sync = callback_session.query(PersonSync).filter(PersonSync.id == data_info["cmd_id"]).first()
     if not person_sync:
         print("sync not find")
         return
@@ -130,39 +131,31 @@ def create_face(data_info):
         # 创建失败
         person_sync.sync_status = 2
         person_sync.sync_desc = data_info["reply"]
-    # db_session.query(PersonResource).filter(PersonResource.person_id == person_sync.person_id,
-    #                                         PersonResource.project_id == person_sync.project_id).update(
-    #     {
-    #         "status": 1     # 更新为新增状态
-    #     }
-    # )
-    db_session.add(person_sync)
-    db_session.commit()
+    callback_session.add(person_sync)
+    callback_session.commit()
     # 查询当前这个人是否同步完成了所有的摄像头
-    is_synchronization(person_sync.person_id, person_sync.project_id)
+    is_synchronization(person_sync.person_id, person_sync.project_id, "add")
 
 
 def update_face(data_info):
     print('update face', data_info)
-    person_sync = db_session.query(PersonSync).filter(PersonSync.id == data_info["cmd_id"]).first()
-    person_resource = db_session.query(PersonResource).filter(
+    person_sync = callback_session.query(PersonSync).filter(PersonSync.id == data_info["cmd_id"]).first()
+    person_resource = callback_session.query(PersonResource).filter(
         PersonResource.person_id == person_sync.person_id,
         PersonResource.project_id == person_sync.project_id,
     ).first()
-    person_resource.status = 2      # 更新为更新状态
-    db_session.add(person_resource)
-    db_session.commit()
     if data_info["code"] == 0:
         # update success
         person_sync.sync_status = 1
-        db_session.commit()
-        is_synchronization(person_sync.person_id, person_sync.project_id)
+        person_sync.sync_desc = ''
+        callback_session.commit()
+        is_synchronization(person_sync.person_id, person_sync.project_id, "update")
     else:
         person_sync.sync_status = 2
         person_sync.sync_desc = data_info["reply"]
         person_resource.sync = 2
-        db_session.add(person_sync)
-        db_session.commit()
+        callback_session.add(person_sync)
+        callback_session.commit()
 
 
 def delete_face(data_info):
@@ -172,58 +165,48 @@ def delete_face(data_info):
 def all_user(data_info):
     # print("all_user", data_info)
     body = data_info["body"]
-    camera = db_session.query(Camera).filter(Camera.sn == data_info["sn"],
+    camera = callback_session.query(Camera).filter(Camera.sn == data_info["sn"],
                                              Camera.project_id == data_info["cmd_id"]).first()
     if not body:
         # 当前相机找不到人
         if camera:
-            db_session.query(PersonSync).filter(PersonSync.camera_id == camera.id,
+            callback_session.query(PersonSync).filter(PersonSync.camera_id == camera.id,
                                                 PersonSync.project_id == data_info["cmd_id"]).update(
                 {
                     "sync_status": 3
                 })
-            db_session.commit()
+            callback_session.commit()
         return
 
     now_camera_person = [i["per_id"] for i in body]
-    db_session.query(PersonSync).filter(~PersonSync.person_id.in_(now_camera_person),
+    callback_session.query(PersonSync).filter(~PersonSync.person_id.in_(now_camera_person),
                                         PersonSync.camera_id == camera.id,
                                         PersonSync.project_id == data_info["cmd_id"]).update(
         {"sync_status": 3}
     )
-    db_session.commit()
+    callback_session.commit()
 
 
 def face_search(client, data_info):
     # 查找设备是否在线
-    # camera = db_session.query(Camera).filter(Camera.sn == data_info["sn"],
-    #                                          Camera.project_id == data_info["cmd_id"]).first()
-    # if camera:
-    for camera in db_session.query(Camera).filter(Camera.sn == data_info["sn"],
-                                                  Camera.project_id == data_info["cmd_id"]).all():
+    camera = callback_session.query(Camera).filter(Camera.sn == data_info["sn"],
+                                             Camera.project_id == data_info["cmd_id"]).first()
+    if camera:
         camera.online = 1
-        db_session.add(camera)
-        db_session.commit()
+        callback_session.add(camera)
+        callback_session.commit()
         # 查看当前摄像头下面的人，默认所有人都要下发
-        person_resource_all = db_session.query(PersonResource).filter(PersonResource.project_id == camera.project_id)
-        # 检测设备中的所有人
-        client.publish(f'face/{data_info["sn"]}/request', json.dumps({
-            "version": "0.2",
-            "client_id": data_info["sn"],
-            "cmd": "get_person_info",
-            "cmd_id": camera.project_id
-        }))
-        for person_resource in person_resource_all:
-            Collect(client, person_resource, camera.id)
-        # 检测是否成功
+        # person_resource_all = callback_session.query(PersonResource).\
+        #     filter(PersonResource.project_id == camera.project_id)
+        # # 检测设备中的所有人
         # client.publish(f'face/{data_info["sn"]}/request', json.dumps({
         #     "version": "0.2",
         #     "client_id": data_info["sn"],
-        #     "cmd": "get_person_info"
+        #     "cmd": "get_person_info",
+        #     "cmd_id": camera.project_id
         # }))
-
-    # db_session.add(camera)
-    # db_session.commit()
+        # for person_resource in person_resource_all:
+        #     Collect(client, person_resource, camera.id)
 
 
 class Collect:
@@ -234,28 +217,19 @@ class Collect:
         self.sn = camera.sn
         self.camera_id = camera_id
         if camera:
-            if person_obj.status == 0 and person_obj.sync == 0:
-                # 人员未操作, 且暂未同步 查询下发照片
+            if (person_obj.status == 0 or person_obj.status == 1) and (person_obj.sync == 0 or person_obj.sync == 128):
+                # 人员未操作, 且暂未完成同步
                 self.create_face_task()
-            elif person_obj.status == 0 and person_obj.sync == 128:
-                # 人员未操作，正在同步中
-                self.create_face_sync()
-            elif person_obj.status == 1 and person_obj.sync == 1:
-                # 人员已经同步，查看照片是否一样， 不一样就更新
-                self.update_face_task()
-            elif person_obj.status == 1 and person_obj.sync == 128:
-                # 人员已经同步, 且在更新照片
-                self.update_face_sync()
-            elif person_obj.status == 2 and person_obj.sync == 2:
-                # 人员更新，同步失败
-                pass
-            elif person_obj.status == 2 and person_obj.sync == 1:
-                # 人员更新完成，且同步成功
+            # elif (person_obj.status == 1 or person_obj.status == 2) and \
+            #         (person_obj.sync == 1 or person_obj.sync == 128 or person_obj.sync == 2):
+            else:
+                # 人员已经下发第一张照片
                 self.update_face_task()
 
     def create_face_task(self):
         # 新建sync task 任务
         self.person_obj.sync = 128
+        self.person_obj.status = 1
         db_session.add(self.person_obj)
         db_session.commit()
         self.face_sync_task("add")
@@ -263,13 +237,15 @@ class Collect:
     def update_face_task(self):
         is_same, sync_status = self.comparison_picture(self.person_obj, self.camera_id)
         if not is_same and sync_status == 100:
+            # 照片不同，更新失败或者正在更新中
             self.person_obj.sync = 128
+            self.person_obj.status = 2
             db_session.add(self.person_obj)
             db_session.commit()
             self.face_sync_task("update")
-
-    def update_face_sync(self):
-        pass
+        elif self.person_obj.sync == 2 or self.person_obj.sync == 128 and is_same:
+            # 照片相同，上一次同步失败或者还没同步完
+            self.create_face_task()
 
     def face_sync_task(self, action):
         # 新建或者更新sync
@@ -279,6 +255,7 @@ class Collect:
                 PersonSync.project_id == self.person_obj.project_id,
                 PersonSync.person_id == self.person_obj.person_id).first()
         if picture_url:
+            is_sync = False
             if not person_sync:
                 person_sync = PersonSync(
                     project_id=self.person_obj.project_id,
@@ -288,11 +265,16 @@ class Collect:
                     attachment_id=self.person_obj.attachment_id
                 )
             else:
+                is_sync = True
                 person_sync.attachment_id = self.person_obj.attachment_id
                 person_sync.sync_status = 128
             db_session.add(person_sync)
             db_session.commit()
-            if action == "add":
+
+            if not is_sync:
+                # 找不到历史任务，默认是新增
+                self.push_face_message(picture_url, person_sync.id, "add")
+            elif action == "add":
                 # 下发新建任务
                 self.push_face_message(picture_url, person_sync.id, "add")
             elif action == "update":
@@ -300,7 +282,7 @@ class Collect:
                 self.push_face_message(picture_url, person_sync.id, "update")
         else:
             self.person_obj.sync = 2
-            self.person_obj.status = 2
+            self.person_obj.status = 1 if action == "add" else 2
             if person_sync:
                 person_sync.attachment_id = self.person_obj.attachment_id
                 person_sync.sync_status = 2
@@ -308,17 +290,6 @@ class Collect:
                 db_session.add(person_sync)
             db_session.add(self.person_obj)
             db_session.commit()
-
-    def create_face_sync(self):
-        # 正在同步中
-        is_same, sync_status = self.comparison_picture(self.person_obj, self.camera_id)
-        if not is_same:
-            if sync_status == 0:
-                # 任务不存在, 新建一个任务
-                self.create_face_task()
-            elif sync_status == 100:
-                # 任务存在且照片不一样
-                pass
 
     def search_picture_url(self, attachment_id):
         if attachment_id:
@@ -360,39 +331,37 @@ class Collect:
 
 
 def main():
-    camera_sn_list = db_session.query(Camera.sn, Camera.project_id).all()
-    business = ConnectBase(on_message=on_message, on_connect=on_connect, on_disconnect=on_disconnect)
-    # 监听设备
-    business.mqtt_client.subscribe([(f"face/{client_sn[0]}/response", 0) for client_sn in camera_sn_list])
+    project_all = db_session.query(PersonResource.project_id).group_by('project_id').all()
+    for project in project_all:
+        person_all = db_session.query(PersonResource).filter(PersonResource.project_id == project[0]).all()
+        camera_sn_list = db_session.query(Camera.sn, Camera.id).filter(Camera.project_id == project[0]).all()
+        business = ConnectBase(on_message=on_message, on_connect=on_connect, on_disconnect=on_disconnect)
+        # 监听设备
+        business.mqtt_client.subscribe([(f"face/{client_sn[0]}/response", 0) for client_sn in camera_sn_list])
+        print([(f"face/{client_sn[0]}/response", 0) for client_sn in camera_sn_list])
+        for camera_sn in camera_sn_list:
+            topic = f"face/{camera_sn[0]}/request"
+            push_message = {
+                'version': '0.2',
+                'cmd': 'face_search',
+                'client_id': camera_sn[0],
+                'cmd_id': project[0]
+            }
+            # 查看设备是否在线
+            business.mqtt_client.publish(topic, payload=json.dumps(push_message), qos=0)
+        #
+        for person in person_all:
+            # 查看当前摄像头下面的人，默认所有人都要下发
+            for camera_sn in camera_sn_list:
+                Collect(business.mqtt_client, person, camera_sn[1])
 
-    for camera_sn in camera_sn_list:
-        topic = "face/request"
-        push_message = {
-            'version': '0.2',
-            'cmd': 'face_search',
-            'client_id': camera_sn[0],
-            'cmd_id': camera_sn[1]
-        }
-        # 查看设备是否在线
-        business.mqtt_client.publish(topic, payload=json.dumps(push_message), qos=0)
-        break
     while True:
         pass
-
-
-# def search_device():
-#     camera_sn_list = db_session.query(Camera.sn).all()
-#     business = Business(on_message=on_message, on_connect=on_connect, on_disconnect=on_disconnect)
-#     # 监听设备
-#     business.add_listen([(f"face/{client_sn[0]}/response", 0) for client_sn in camera_sn_list])
-#     for camera_sn in camera_sn_list:
-#         # business.topic = f"face/{camera_sn[0]}/request"
-#         business.topic = f"face/request"
-#         business.custom_com(camera_sn[0], "face_search")
-#
-#     while True:
-#         pass
-
-
 if __name__ == '__main__':
     main()
+
+'''
+select * from camera_personresource;
+select * from camera_personsync;
+update camera_personresource set attachment_id ='812cc745df6e4d8d8115f2d40783f636';
+'''

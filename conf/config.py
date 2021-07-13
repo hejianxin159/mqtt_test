@@ -6,4 +6,8 @@ class Config:
     DB_PASSWORD = "123456"
     DB_HOST = "10.28.25.213"
     DB_PORT = 3306
-    RESOURCE_DB_NAME = "netmon"
+    RESOURCE_DB_NAME = "rc_app"
+
+    IMAGE_PREFIX = 'http://10.28.25.213/f/'
+    SOURCE_FILE_DIR_PREFIX = "/opt/rc-app/api/data/thumbnail"
+    REMOTE_FILE_DIR_PREFIX = "/opt/rc-app/api/data/face"
